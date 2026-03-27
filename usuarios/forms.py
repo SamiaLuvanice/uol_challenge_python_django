@@ -4,7 +4,7 @@ from .models import Usuario
 class UsuarioForm(forms.ModelForm):
     class Meta:
         model = Usuario
-        fields = ['nome', 'email', 'telefone','grupo']
+        fields = ['nome', 'email', 'codinome', 'telefone','grupo']
         widgets = {
             'grupo': forms.RadioSelect()
         }
@@ -14,3 +14,5 @@ class UsuarioForm(forms.ModelForm):
         for field_name, field in self.fields.items():
             if not field_name == 'grupo':  
                 field.widget.attrs.setdefault('class', 'form-control')
+        
+        self.fields['telefone'].widget.attrs.update({'data-mask': '(00) 00000-0000'})
