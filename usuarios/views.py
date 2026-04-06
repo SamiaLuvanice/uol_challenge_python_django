@@ -1,8 +1,13 @@
+from linecache import cache
+
 from django.http import HttpResponse
 from django.shortcuts import render
 from django.views import View
 from .forms import UsuarioForm
 import requests
+import xml.etree.ElementTree as ET
+from .models import Usuario
+from django.core.cache import cache
 
 class Cadastro(View):
     template_name = 'cadastro.html'
@@ -17,15 +22,39 @@ class Cadastro(View):
 
         if form.is_valid():
             codinome = self._get_codinome(form.cleaned_data['grupo'])
-            obj = form.save()
+            obj = form.save(commit=False)
+            obj.codinome = codinome
+            obj.save()
             return HttpResponse('Usuário cadastrado com sucesso!')
            
         return render(request, self.template_name, {'form': form})
     
     def _get_codinome(self, grupo):
         if grupo =='V':
-            response  = requests.get('https://raw.githubusercontent.com/uolhost/test-backEnd-Java/master/referencias/vingadores.json').json()
-            codinomes = [i['codinome'] for i in response['vingadores']]
-            print(codinomes)
+            if not cache.get('vingadores'):
+                response  = requests.get('https://raw.githubusercontent.com/uolhost/test-backEnd-Java/master/referencias/vingadores.json').json()
+                cache.set('vingadores', response)
+            
+            codinomes = [i['codinome'] for i in cache.get('vingadores')['vingadores']]
+
         elif grupo == 'LJ':
-            ...
+            if not cache.get('liga_da_justica'):
+                response  = requests.get('https://raw.githubusercontent.com/uolhost/test-backEnd-Java/master/referencias/liga_da_justica.xml').content
+                cache.set('liga_da_justica', response)
+                
+            root = ET.fromstring(cache.get('liga_da_justica'))
+            codinomes_elements = root.findall('.//codinome')
+            codinomes = [codinome.text for codinome in codinomes_elements]
+            
+        codinomes_usados = Usuario.objects.values_list('codinome', flat=True)
+        codinomes_disponiveis = set(codinomes) - set(codinomes_usados)
+        if not codinomes_disponiveis:
+            raise ValueError('Não há mais codinomes disponíveis para o grupo selecionado.')
+        return list(codinomes_disponiveis)[0]
+
+class Visualizar(View):
+    template_name = 'visualizar.html'
+
+    def get(self, request):
+        usuarios = Usuario.objects.all()
+        return render(request, self.template_name, {'usuarios': usuarios})
